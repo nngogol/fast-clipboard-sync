@@ -1,12 +1,18 @@
 # fast-clipboard-sync
 
-Use-case: your copy-paste clipboard *TO* other machine: other computer, VM, remote machine.
+<p align="center">
+  <img src="https://github.com/nngogol/fast-clipboard-sync/blob/master/1.gif" />
+</p>
 
-<!-- Tutorial included -->
 
 ✓ Usage section included
 
 ✓ Ready to use
+
+Use-case: your copy-paste clipboard *TO* other machine: other computer, VM, remote machine.
+
+<!-- Tutorial included -->
+
 
 # Nice parts
 
