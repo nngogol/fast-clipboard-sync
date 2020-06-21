@@ -5,7 +5,8 @@
 # | (__| | |  __/ | | | |_
 #  \___|_|_|\___|_| |_|\__|
 
-import asyncio, json, websockets, pyperclip
+import asyncio, json, websockets, pyperclip, sys
+from config import server_host, server_port
 curr_ws, stop_queue = None, asyncio.Queue()
 
 async def get():
@@ -13,6 +14,9 @@ async def get():
 async def send(json_data):
 	global curr_ws;
 	if curr_ws: await curr_ws.send(json.dumps(json_data))
+async def stop_buffer_watcher():
+	await stop_queue.put('close watcher');
+	await asyncio.sleep(0.05)
 
 async def buffer_watcher():
 	global curr_ws, stop_queue
@@ -31,14 +35,14 @@ async def buffer_watcher():
 			if prev != curr: await send({'action':'new-buffer','data':curr})
 			prev = curr
 
-	except KeyboardInterrupt as e:  print('\tkeyboardinterrupt > {str(e)}')
+	except KeyboardInterrupt as e:  print(f'\tkeyboardinterrupt > {str(e)}')
 	except Exception as e:          print(f'\tError>>>: {e.msg}')
 	print('<< watcher end')
 async def ws_sender():
-	global curr_ws, stop_queue
+	global curr_ws, stop_queue, host, port
 	try:
 		# connect to a server
-		ws = await websockets.connect(f"ws://localhost:8000"); curr_ws = ws;
+		ws = await websockets.connect(f"ws://{server_host}:{server_port}"); curr_ws = ws;
 		first_answer = await get(); msg = first_answer['msg']
 
 		async for result in ws: # read messages, till you catch STOP message
@@ -49,7 +53,7 @@ async def ws_sender():
 
 		if ws: # close other loop + socket
 			try:
-				await stop_queue.put('close watcher'); await asyncio.sleep(0.05)
+				await stop_buffer_watcher()
 				await ws.close()
 			except Exception as e: print('Exception. cant close ws:', e)
 		print('\t\tCLient closed!')
@@ -57,9 +61,19 @@ async def ws_sender():
 	except KeyboardInterrupt as e:
 		if ws:
 			# close other loop + socket
-			await stop_queue.put('close watcher'); await asyncio.sleep(0.05)
-			await send({'action': 'exit'}); await ws.close()
-	except Exception as e: print('\tException. ws died: ', e)
+			await stop_buffer_watcher()
+			await send({'action': 'exit'});
+			await ws.close()
+	except Exception as e:
+		if e.errno == -3:
+			print(f'!> Fix your config.py; {e}')
+			await stop_buffer_watcher()
+		if e.errno == 111:
+			print(f'!> IP port is bad; {e}')
+			await stop_buffer_watcher()
+		else:
+			print(f'!> GENERAL ERROR: {e}')
+
 	print('<< sender end')
 
 def main():
@@ -71,7 +85,7 @@ def main():
 		loop.close();
 		print('||| ended')
 	except KeyboardInterrupt as e:   asyncio.ensure_future(curr_ws.close())
-	except Exception as e:           print('WTF? watch the code')
+	except Exception as e:           print('WTF? watch the code', e)
 
 	print('\nbye.')
 if __name__ == '__main__': main()

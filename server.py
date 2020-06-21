@@ -7,19 +7,25 @@
     on_new_message -> set new clipboard_data'''
 
 import asyncio, json, websockets, pyperclip
+from config import server_port
 
 curr_ws = None
-async def close_it():
-    global curr_ws; await curr_ws.close()
-async def send(json_data):
-    global curr_ws;
-    if curr_ws: await curr_ws.send(json.dumps(json_data))
 
-async def on_ws_connected(ws, path):
-    global curr_ws;
-    curr_ws = ws
+async def close_it():
+    global curr_ws
+    await curr_ws.close()
+
+
+async def send(json_data):
+    global curr_ws
+    if curr_ws:
+        await curr_ws.send(json.dumps(json_data))
+
+
+async def on_message(ws, path):
+    global curr_ws; curr_ws = ws
     print('> new connection')
-    await send({'action' : 'text-message', 'msg' : 'привет'})
+    await send({'action': 'text-message', 'msg': 'привет'})
 
     try:
         async for message in ws:
@@ -32,33 +38,44 @@ async def on_ws_connected(ws, path):
                 print('\tnew-buffer')
                 pyperclip.copy(data["data"])
                 await send({
-                        'action' : 'text-message',
-                        'msg' : 'copied!'
-                    })
-        
+                    'action': 'text-message',
+                    'msg': 'copied!'
+                })
+
         await ws.close()
-    except Exception as e: (await ws.close(), print('\tCLOSED'))
+    except Exception as e:
+        if e.code == 1006:
+            print('\tWS is CLOSED by user')
+        else:
+            print(f'\tError. Report to developer: {e}')
     print('exiting')
+
+
 def main():
-    global curr_ws;
+    global curr_ws
+    global server_port
     try:
         print('started')
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(websockets.serve(on_ws_connected, "localhost", 8000))
+        loop.run_until_complete(websockets.serve(on_message, '0.0.0.0', server_port))
         loop.run_forever()
-    
+
     except KeyboardInterrupt as e:
         if curr_ws:
             async def close_it():
-                global curr_ws;
+                global curr_ws
                 if curr_ws and curr_ws.state.value != 3:
-                    await send({'action' : 'exit'})
+                    await send({'action': 'exit'})
                     await asyncio.sleep(0.05)
                     await curr_ws.close()
             asyncio.get_event_loop().run_until_complete(close_it())
             # asyncio.ensure_future(close_it())
         print('keyboard exiting')
-    
-    except Exception as e: print(f'WTF? watch the code: {e}')
+
+    except Exception as e:
+        print(f'WTF? watch the code: {e}')
     print('ended')
-if __name__ == '__main__': main()
+
+
+if __name__ == '__main__':
+    main()
